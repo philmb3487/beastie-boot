@@ -30,6 +30,27 @@ add_executable(beastie
 )
 target_compile_options(beastie PRIVATE -Wall)
 
+target_include_directories(beastie PUBLIC deps/zlib/)
+target_sources(beastie PUBLIC
+    deps/zlib/adler32.c
+    deps/zlib/compress.c
+    deps/zlib/crc32.c
+    deps/zlib/deflate.c
+    deps/zlib/inffast.c
+    deps/zlib/inflate.c
+    deps/zlib/inftrees.c
+    deps/zlib/trees.c
+    deps/zlib/zutil.c
+)
+
+target_include_directories(beastie PUBLIC deps/iostreams/include/)
+target_sources(beastie PUBLIC
+    deps/iostreams/src/file_descriptor.cpp
+    deps/iostreams/src/mapped_file.cpp
+    deps/iostreams/src/zlib.cpp
+    deps/iostreams/src/gzip.cpp
+)
+
 include(FetchContent)
 set(FETCHCONTENT_QUIET OFF)
 

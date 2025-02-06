@@ -1,0 +1,6 @@
+[submodule "deps/zlib"]
+	path = deps/zlib
+	url = https://github.com/madler/zlib
+[submodule "deps/iostreams"]
+	path = deps/iostreams
+	url = https://github.com/boostorg/iostreams
