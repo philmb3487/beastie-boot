@@ -1,4 +1,4 @@
-# beastie
+# beastie boot
 
 ## A project written in C++ that boots FreeBSD on Linux using Kexec
 
