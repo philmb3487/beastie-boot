@@ -24,6 +24,10 @@ using namespace beastie;
 #include <syscall.h>
 #include <unistd.h>
 
+#include <boost/iostreams/filtering_streambuf.hpp>
+#include <boost/iostreams/filter/gzip.hpp>
+#include <boost/iostreams/copy.hpp>
+
 template<class T>
 T beastie::slurp(std::filesystem::path path)
 {
@@ -69,6 +73,27 @@ unsigned long long beastie::slurpULL(std::filesystem::path path)
     auto contents = slurp(path);
     result = std::stoull(contents, 0, 0);
     return result;
+}
+
+std::vector<char> beastie::zslurp(std::filesystem::path path)
+{
+    std::vector<char> buffer;
+    typedef std::istreambuf_iterator<char> Iter;
+
+    std::ifstream file(path, std::ios::binary | std::ios::binary);
+    unsigned char magic0, magic1;
+    file >> magic0 >> magic1;
+    file.seekg(0);
+
+    if (magic0 == 0x1f && magic1 == 0x8b) {
+        boost::iostreams::filtering_istreambuf in;
+        in.push(boost::iostreams::gzip_decompressor());
+        in.push(file);
+        buffer.assign(Iter(&in), {});
+        return buffer;
+    } else {
+        return slurp<std::vector<char>>(path);
+    }
 }
 
 void beastie::printBuffer(std::span<char> vs, std::string_view name)

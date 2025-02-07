@@ -74,4 +74,36 @@ struct efifbinfo {
     uint32_t maskReserved;
 } __attribute__((packed));
 
+enum vfnt_map_type {
+    VFNT_MAP_NORMAL = 0,    /* Normal font. */
+    VFNT_MAP_NORMAL_RIGHT,  /* Normal font right hand. */
+    VFNT_MAP_BOLD,      /* Bold font. */
+    VFNT_MAP_BOLD_RIGHT,    /* Bold font right hand. */
+    VFNT_MAPS       /* Number of maps. */
+};
+
+struct font_header {
+    uint8_t     fh_magic[8];
+    uint8_t     fh_width;
+    uint8_t     fh_height;
+    uint16_t    fh_pad;
+    uint32_t    fh_glyph_count;
+    uint32_t    fh_map_count[VFNT_MAPS];
+} __attribute__((packed));
+
+struct font_info {
+    int32_t fi_checksum;
+    uint32_t fi_width;
+    uint32_t fi_height;
+    uint32_t fi_bitmap_size;
+    uint32_t fi_map_count[VFNT_MAPS];
+};
+
+struct vfnt_map {
+    uint32_t     vfm_src;
+    uint16_t     vfm_dst;
+    uint16_t     vfm_len;
+} __attribute__((packed));
+typedef struct vfnt_map vfnt_map_t;
+
 } // namespace beastie

@@ -18,6 +18,7 @@ using namespace beastie;
 #include <linux/kexec.h>
 #include <sys/syscall.h>
 #include <unistd.h>
+#include <endian.h>
 
 beastie::Bootloader::Bootloader()
     : m_debug(false)
@@ -79,6 +80,129 @@ void beastie::Bootloader::fileLoad(std::filesystem::path path)
 {
     auto kernel = slurp<std::vector<char>>(path);
     return elfLoad(std::move(kernel));
+}
+
+/*
+ * Documentation for the font format (.fnt files):
+ *
+ * header
+ *   . char[8] magic
+ *   . u8      width
+ *   . u8      height
+ *   . u16     pad
+ *   . u32     glyph count
+ *   . u32[]   map count
+ *
+ * glyph data
+ *   . char[]  data
+ *
+ * font mappings (4 in total, repeats map count times)
+ *   . u32     src
+ *   . u16     dst
+ *   . u16     len
+ *
+ * NOTES:
+ *   - All the fields are stored in big endian format.
+ *   - The glyph data has a size of (glyph_count * width * height) bytes,
+ *       where width is rounded to the next multiple of 8.
+ *   - There are normally 4 mapping tables:
+ *       normal, normal right, bold, bold right.
+ *
+ ****/
+/*
+ * Documentation for in-kernel memory format (metadata type 0x800e)
+ *
+ * header
+ *   . u32     checksum
+ *   . u32     width
+ *   . u32     height
+ *   . u32     bitmap size
+ *   . u32[]   map count
+ *
+ * font mappings (4 in total, repeats map count times)
+ *   . u32     src
+ *   . u16     dst
+ *   . u16     len
+ *
+ * glyph data
+ *   . char[]  data
+ *
+ * NOTES:
+ *   - The glyph data size is in the header.
+ *   - See the file format .fnt for mappings.
+ *
+ ****/
+void beastie::Bootloader::fontLoad(std::filesystem::path path)
+{
+    unsigned index = 0;
+    auto buffer = zslurp(path);
+    font_header hdr;
+    std::memcpy(&hdr, buffer.data(), sizeof(hdr));
+
+    if (std::string((char*)&hdr.fh_magic[0], 8) != "VFNT0002")
+        throw std::runtime_error(std::format("{}: format error", path.string()));
+
+    // The header is stored big endian (!!)
+    hdr.fh_glyph_count = be32toh(hdr.fh_glyph_count);
+    for (int i = 0; i < VFNT_MAPS; ++i)
+        hdr.fh_map_count[i] = be32toh(hdr.fh_map_count[i]);
+    index += sizeof(hdr);
+
+    unsigned gbytes = howmany(hdr.fh_width, 8) * hdr.fh_height;
+    unsigned glyphCount = hdr.fh_glyph_count;
+    unsigned total = glyphCount * gbytes;
+
+    font_info fi;
+    fi.fi_width = hdr.fh_width;
+    fi.fi_height = hdr.fh_height;
+    fi.fi_bitmap_size = total;
+    for (int i = 0; i < VFNT_MAPS; ++i)
+        fi.fi_map_count[i] = hdr.fh_map_count[i];
+
+    uint32_t checksum;
+    checksum = fi.fi_width;
+    checksum += fi.fi_height;
+    checksum += fi.fi_bitmap_size;
+    for (int i = 0; i < VFNT_MAPS; ++i)
+        checksum += fi.fi_map_count[i];
+
+    fi.fi_checksum = -checksum;
+
+    uint8_t fontBytes[total];
+    std::memcpy(fontBytes, buffer.data() + index, sizeof(fontBytes));
+    index += sizeof(fontBytes);
+
+    std::vector<vfnt_map> maps[VFNT_MAPS];
+    for (int i = 0; i < VFNT_MAPS; ++i) {
+        for (unsigned j = 0; j < hdr.fh_map_count[i]; ++j) {
+            vfnt_map map;
+            std::memcpy(&map, buffer.data() + index, sizeof(map));
+            map.vfm_src = be32toh(map.vfm_src);
+            map.vfm_dst = be16toh(map.vfm_dst);
+            map.vfm_len = be16toh(map.vfm_len);
+            maps[i].push_back(map);
+            index += sizeof(map);
+        }
+    }
+
+    m_fontblock.clear();
+
+    // 1. insert the header
+    std::span<char> spanFontHdr((char*)&fi, sizeof(fi));
+    m_fontblock.insert(m_fontblock.end(), spanFontHdr.begin(), spanFontHdr.end());
+
+    // 2. insert the maps
+    for (int i = 0; i < VFNT_MAPS; ++i) {
+        for (vfnt_map map : maps[i]) {
+            std::span<char> spanFontMap((char*)&map, sizeof(map));
+            m_fontblock.insert(m_fontblock.end(), spanFontMap.begin(), spanFontMap.end());
+        }
+    }
+
+    // 3. insert glyph data
+    std::span<char> spanFontGlyph((char*)fontBytes, total);
+    m_fontblock.insert(m_fontblock.end(), spanFontGlyph.begin(), spanFontGlyph.end());
+    assert(index == buffer.size());
 }
 
 void beastie::Bootloader::elfLoad(std::vector<char>&& buffer)
@@ -176,10 +300,12 @@ void beastie::Bootloader::elfLoadExec(Elf64_Ehdr hdr, std::vector<char>&& buffer
         break;
     }
 
+    // XXX move to boot()
     m_kernphys = 0x20'0000;
     m_symphys = m_kernphys + roundup(m_kernblock.size(), 4096);
     m_envphys = m_symphys + roundup(m_sym.size(), 4096);
-    m_metaphys = m_envphys + roundup(m_env.size(), 4096);
+    m_fontphys = m_envphys + roundup(m_env.size(), 4096);
+    m_metaphys = m_fontphys + roundup(m_fontblock.size(), 4096);
 
     writeMetadata();
     m_kernend = m_metaphys + roundup(m_meta.size(), 4096);
@@ -296,6 +422,14 @@ void beastie::Bootloader::prepareSegments()
         m_segments[4].memsz = roundup(m_bootblock.size(), 4096);
         m_nr_segments++;
     }
+
+    if (m_fontblock.size() > 0) {
+        m_segments[5].buf = m_fontblock.data();
+        m_segments[5].bufsz = m_fontblock.size();
+        m_segments[5].mem = reinterpret_cast<const void*>(m_fontphys);
+        m_segments[5].memsz = roundup(m_fontblock.size(), 4096);
+        m_nr_segments++;
+    }
 }
 
 void beastie::Bootloader::writeMetadata()
@@ -338,6 +472,8 @@ void beastie::Bootloader::writeMetadata()
     efifb.maskReserved = 0xff000000;
     std::span<char> efifbSpan((char*)&efifb, sizeof(efifb));
     m_meta.addMetadata(MODINFO_METADATA | MODINFOMD_EFI_FB, efifbSpan);
+
+    m_meta.addMetadata(MODINFO_METADATA | MODINFOMD_FONT, uintptr_t(m_fontphys));
 
     m_meta.addEnd();
 }

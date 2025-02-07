@@ -32,6 +32,9 @@ public:
     // Load an ELF kernel/module
     void fileLoad(std::filesystem::path path);
 
+    // Load a font file
+    void fontLoad(std::filesystem::path path);
+
     // Boot into the new system
     void boot();
 
@@ -78,6 +81,8 @@ private:
     smapinfo m_smap;
     efimapinfo m_efimap;
     bool m_force;
+    std::vector<char> m_fontblock;
+    uintptr_t m_fontphys;
 
 };
 } // namespace beastie

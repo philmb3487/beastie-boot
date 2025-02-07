@@ -137,11 +137,11 @@ int main(int argc, char* argv[])
         if (Options.debug)
             std::cout << std::format("boot_howto=0x{:x}\n", Options.boot_howto);
 
-
         Bootloader bootloader;
         bootloader.setDebug(Options.debug);
         bootloader.setHowto(Options.boot_howto);
         bootloader.setForce(Options.force);
+        bootloader.fontLoad(Options.root/"boot/fonts/12x24.fnt.gz");
         bootloader.fileLoad(Options.root/"boot/kernel/kernel");
         if (Options.pretend == false) {
             bootloader.boot();

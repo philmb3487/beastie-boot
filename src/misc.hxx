@@ -25,6 +25,9 @@ std::vector<std::string> slurpLines(std::filesystem::path path);
 // Read a file (in its entirety) into an ull.
 unsigned long long slurpULL(std::filesystem::path path);
 
+// gzip version of slurp()
+std::vector<char> zslurp(std::filesystem::path path);
+
 // Debugging tool...
 void printBuffer(std::span<char>, std::string_view name);
 
@@ -33,7 +36,11 @@ constexpr auto roundup(std::integral auto i, std::integral auto n)
 {
     return (i/n + 1) * n;
 }
-//static_const(roundup(0,0) == 0);
+
+constexpr auto howmany(std::integral auto x, std::integral auto y)
+{
+    return (x + y - 1) / y;
+}
 
 // Returns platform EFI support
 bool isEFI();
