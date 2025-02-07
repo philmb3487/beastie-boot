@@ -39,9 +39,30 @@ hbreak hammer_time
 continue
 ```
 
-## Problems
+## Screenshots
 
-QEMU seems to work well. However it does not seem to work yet on real hardware. This is because of VGA issues. Work is ongoing and I hope to add more support for different systems.
+### Running Beastie
+![Running beastie](./doc/screenshots/command-run.png)
 
-* VMSVGA: broken
-* Alienware M18 R2: broken
+### FreeBSD Booting, with Font Support
+![FreeBSD booting](./doc/screenshots/booting.png)
+
+### Waiting for Root Device
+![FreeBSD booting](./doc/screenshots/mountroot.png)
+
+### Welcome!
+![FreeBSD booting](./doc/screenshots/installer.png)
+
+## Known Problems
+
+### Graphics Cards and Framebuffers are Complicated
+
+QEMU in VGA mode seems to work well. VMWare Workstation[^1] also seems to work well in its native VMSVGAII mode. However *beastie* does not seem to work yet on real hardware. This is because of VGA issues. Work is ongoing and I hope to add more support for different systems.
+
+
+- [x] QEMU VGA
+- [x] VMware SVGA-II
+- [ ] Alienware M18 R2 (Xe card)
+
+[^1]: [VMware Fusion and Workstation are Now Free for All Users
+](https://blogs.vmware.com/cloud-foundation/2024/11/11/vmware-fusion-and-workstation-are-now-free-for-all-users/)
