@@ -28,7 +28,7 @@ add_executable(beastie
     src/ci915gfx.hxx src/ci915gfx.cxx
     src/cgfx.hxx
 )
-target_compile_options(beastie PRIVATE -Wall)
+target_compile_options(beastie PRIVATE -Wall -Wno-vla)
 
 target_include_directories(beastie PUBLIC deps/zlib/)
 target_sources(beastie PUBLIC
